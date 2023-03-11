@@ -12,7 +12,8 @@ RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
 RUN cargo build --release
 
-FROM gcr.io/distroless/static
-COPY --from=builder /work/identicon/target/x86_64-unknown-linux-musl/release/identicon-server /
+FROM gcr.io/distroless/static:nonroot
+WORKDIR /
+COPY --from=builder --chown=nonroot:nonroot /work/identicon/target/x86_64-unknown-linux-musl/release/identicon-server /
 EXPOSE 8080
 CMD ["/identicon-server", "--addr", "0.0.0.0:8080", "--concurrency", "64"]
