@@ -2,7 +2,7 @@
 
 Generate identicon style avatars.
 
-```md
+```markdown
 ![](https://identicon.iferr.dev/abc)
 ```
 
