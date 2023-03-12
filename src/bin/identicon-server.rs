@@ -11,6 +11,7 @@ use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{BoxError, Router};
+use bytes::Bytes;
 use clap::Parser;
 use faststr::FastStr;
 use humantime::parse_duration;
@@ -38,14 +39,14 @@ struct Args {
     timeout: Duration,
 
     /// LRU cache capacity
-    #[arg(long = "lru", default_value = "64")]
+    #[arg(long, default_value = "64")]
     lru_cap: NonZeroUsize,
 }
 
 #[derive(Debug, Clone)]
 struct CacheEntry {
-    image: Vec<u8>,
-    etag: String,
+    image: Bytes,
+    etag: FastStr,
 }
 
 type AppState = Arc<Mutex<LruCache<FastStr, CacheEntry>>>;
@@ -117,7 +118,7 @@ fn load(name: FastStr) -> CacheEntry {
 
     let image = identicon::make(name.as_bytes());
 
-    let mut buf = Vec::with_capacity(4096);
+    let mut buf = Vec::with_capacity(3072);
     image
         .write_to(&mut Cursor::new(&mut buf), image::ImageOutputFormat::Png)
         .unwrap();
@@ -125,8 +126,8 @@ fn load(name: FastStr) -> CacheEntry {
     let hash = utils::md5(&buf);
 
     CacheEntry {
-        image: buf,
-        etag: hex::encode(hash),
+        image: buf.into(),
+        etag: hex::encode(hash).into(),
     }
 }
 async fn not_found() -> impl IntoResponse {
@@ -173,6 +174,4 @@ async fn shutdown_signal() {
         _ = ctrl_c => {},
         _ = terminate => {},
     }
-
-    info!("signal received, starting graceful shutdown");
 }
