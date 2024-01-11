@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::convert::Infallible;
 use std::io::Cursor;
 use std::sync::Arc;
 use std::time::Duration;
@@ -15,6 +16,7 @@ use identicon::utils;
 use quick_cache::sync::Cache;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
+use tracing::{debug, instrument};
 
 type AppState = Arc<Cache<FastStr, CacheEntry>>;
 
@@ -24,6 +26,7 @@ struct CacheEntry {
     etag: FastStr,
 }
 
+#[instrument(skip_all)]
 async fn gen_image(
     Path(name): Path<FastStr>,
     headers: HeaderMap,
@@ -35,6 +38,7 @@ async fn gen_image(
 
     let entry = cache
         .get_or_insert_async(&name, async {
+            debug!("cache missing");
             let image = identicon::gen(name.as_bytes());
 
             let mut buf = Vec::with_capacity(3072);
@@ -44,7 +48,7 @@ async fn gen_image(
 
             let hash = utils::md5(&buf);
 
-            Ok::<_, ()>(CacheEntry {
+            Ok::<_, Infallible>(CacheEntry {
                 image: buf.into(),
                 etag: hex::encode(hash).into(),
             })
@@ -52,23 +56,23 @@ async fn gen_image(
         .await
         .unwrap();
 
-    if let Some(etag) = headers.get(header::IF_NONE_MATCH) {
-        if let Ok(etag) = etag.to_str() {
-            if etag == entry.etag {
-                return StatusCode::NOT_MODIFIED.into_response();
-            }
+    let response_headers = [
+        (header::CONTENT_TYPE, "image/png"),
+        (header::CACHE_CONTROL, "public, max-age=30672000"),
+        (header::ETAG, &entry.etag),
+    ];
+
+    if let Some(etag) = headers
+        .get(header::IF_NONE_MATCH)
+        .and_then(|x| x.to_str().ok())
+    {
+        if etag == entry.etag {
+            debug!("etag matched");
+            return (response_headers, StatusCode::NOT_MODIFIED).into_response();
         }
     }
 
-    (
-        [
-            (header::CONTENT_TYPE, "image/png"),
-            (header::CACHE_CONTROL, "public, max-age=30672000"),
-            (header::ETAG, &entry.etag),
-        ],
-        entry.image,
-    )
-        .into_response()
+    (response_headers, entry.image).into_response()
 }
 
 async fn not_found() -> impl IntoResponse {
