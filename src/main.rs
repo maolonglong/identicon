@@ -43,7 +43,7 @@ async fn gen_image(
 
             let mut buf = Vec::with_capacity(3072);
             image
-                .write_to(&mut Cursor::new(&mut buf), image::ImageOutputFormat::Png)
+                .write_to(&mut Cursor::new(&mut buf), image::ImageFormat::Png)
                 .unwrap();
 
             let hash = utils::md5(&buf);

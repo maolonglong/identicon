@@ -22,6 +22,7 @@
         devShells.default = pkgs.mkShell {
           nativeBuildInputs = with pkgs; [
             (rust-bin.fromRustupToolchainFile ./rust-toolchain.toml)
+            cargo-shuttle
           ];
         };
       }
